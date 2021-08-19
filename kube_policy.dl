@@ -1,0 +1,46 @@
+
+// Borrowed from https://github.com/vmware/differential-datalog/blob/master/test/antrea/k8spolicy.dl
+import intern
+
+typedef UID = UID{uid: string}
+// Namespace name.  Since there won't be a lot of namespaces, interned string is
+// an efficient representation.
+typedef NSName = IString
+
+
+// PodSpec is a description of a pod.
+typedef PodSpec = PodSpec {
+    // NodeName is a request to schedule this pod onto a specific node. If it is non-empty,
+    // the scheduler simply schedules this pod onto that node, assuming that it fits resource
+    // requirements.
+    nodeName: string
+}
+
+typedef PodStatus = PodStatus {
+    // IP address allocated to the pod. Routable at least within the cluster.
+    // Empty if not yet allocated.
+    podIP: string
+}
+
+// Pod is a collection of containers that can run on a host. This resource is created
+// by clients and scheduled onto hosts. */
+// TODO(leonid): primary key
+input relation &Pod (
+    // Name must be unique within a namespace.
+    name: string,
+    // Namespace defines the space within each name must be unique.
+    namespace: NSName,
+    // UID is the unique in time and space value for this object.
+    uid: UID,
+    // Map of string keys and values that can be used to organize and categorize
+    // (scope and select) objects. May match selectors of replication controllers
+    // and services.
+    // More info: http://kubernetes.io/docs/user-guide/labels
+    // +optional
+    labels: Map<string, string>,
+    // Specification of the desired behavior of the pod.
+    spec: PodSpec,
+    // Most recently observed status of the pod.
+    status: PodStatus
+)
+
