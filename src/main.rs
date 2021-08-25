@@ -3,7 +3,7 @@ extern crate log;
 
 use color_eyre::Result;
 use futures::prelude::*;
-use k8s_openapi::api::core::v1::Event;
+use k8s_openapi::api::core::v1::{Pod, Event};
 use kube::{
     api::{ListParams, ResourceExt},
     Api, Client,
@@ -61,8 +61,37 @@ lazy_static! {
     static ref hddlog_g: HDDlog = init_ddlog();
 }
 
+async fn pod_watcher() -> Result<()> {
+    std::env::set_var("RUST_LOG", "info,kube=debug");
+    env_logger::init();
+    let client = Client::try_default().await?;
+    let namespace = std::env::var("NAMESPACE").unwrap_or_else(|_| "default".into());
+    let api = Api::<Pod>::namespaced(client, &namespace);
+    let watcher = watcher(api, ListParams::default());
+    try_flatten_applied(watcher)
+        .try_for_each(|p| async move {
+            log::debug!("Applied: {}", p.name());
+            dump_pod_spec(&p);
+            if let Some(unready_reason) = pod_unready(&p) {
+                log::warn!("{}", unready_reason);
+            }
+            Ok(())
+        })
+        .await?;
+    Ok(())
+}
+
+fn dump_pod_spec(p: &Pod) {
+    let spec = p.spec.as_ref().unwrap();
+    log::info!("podspec {:?}", spec);
+}
+
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> Result<()> {
+    pod_watcher().await
+}
+
+async fn event_watcher() -> anyhow::Result<()> {
     std::env::set_var("RUST_LOG", "info,kube=debug");
     env_logger::init();
 
@@ -95,7 +124,7 @@ fn handle_event(ev: Event) -> anyhow::Result<()> {
     );
     if ev1.involved_object.kind.unwrap() == String::from("Pod") {
         let pod_name = ev1.involved_object.name.unwrap().clone();
-        let mut pod_obj = Pod::default();
+        let mut pod_obj = DDPod::default();
         pod_obj.name = pod_name;
 
         unsafe {
@@ -103,7 +132,7 @@ fn handle_event(ev: Event) -> anyhow::Result<()> {
 
             let updates = vec![Update::Insert {
                 // We are going to insert..
-                relid: Relations::Pod as RelId, // .. into relation with this Id.
+                relid: Relations::DDPod as RelId, // .. into relation with this Id.
                 // `Word1` type, declared in the `types` crate has the same fields as
                 // the corresponding DDlog type.
                 v: pod_obj.into_ddvalue(),
@@ -189,4 +218,23 @@ fn dump_delta(ddlog: &HDDlog, delta: &DeltaMap<DDValue>) {
             info!("{} {:+}", val, weight);
         }
     }
+}
+
+fn pod_unready(p: &Pod) -> Option<String> {
+    let status = p.status.as_ref().unwrap();
+    if let Some(conds) = &status.conditions {
+        let failed = conds
+            .into_iter()
+            .filter(|c| c.type_ == "Ready" && c.status == "False")
+            .map(|c| c.message.clone().unwrap_or_default())
+            .collect::<Vec<_>>()
+            .join(",");
+        if !failed.is_empty() {
+            if p.metadata.labels.as_ref().unwrap().contains_key("job-name") {
+                return None; // ignore job based pods, they are meant to exit 0
+            }
+            return Some(format!("Unready pod {}: {}", p.name(), failed));
+        }
+    }
+    None
 }

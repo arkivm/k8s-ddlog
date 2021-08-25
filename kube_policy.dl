@@ -25,7 +25,7 @@ typedef PodStatus = PodStatus {
 // Pod is a collection of containers that can run on a host. This resource is created
 // by clients and scheduled onto hosts. */
 // TODO(leonid): primary key
-input relation &Pod (
+input relation &DDPod (
     // Name must be unique within a namespace.
     name: string,
     // Namespace defines the space within each name must be unique.
