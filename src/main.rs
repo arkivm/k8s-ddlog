@@ -8,6 +8,8 @@ use kube::{
     api::{ListParams, ResourceExt},
     Api, Client,
 };
+use kube::Config as KubeConfig;
+
 use kube_runtime::{utils::try_flatten_applied, watcher};
 
 use kube_policy_ddlog as myddlog;
@@ -70,6 +72,11 @@ async fn main() -> anyhow::Result<()> {
     let lp = ListParams::default();
 
     let mut ew = try_flatten_applied(watcher(events, lp)).boxed();
+
+    // Get cluster config
+    let cfg = KubeConfig::infer().await?;
+
+    println!("config {:?}", cfg);
 
     while let Some(event) = ew.try_next().await? {
         handle_event(event)?;
