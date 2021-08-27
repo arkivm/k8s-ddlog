@@ -20,6 +20,8 @@ use myddlog::Relations;
 // Type and function definitions generated for each ddlog program
 use myddlog::typedefs::*;
 
+use myddlog::typedefs::ddlog_std::Option as ddOption;
+
 // The differential_datalog crate contains the DDlog runtime that is
 // the same for all DDlog programs and simply gets copied to each generated
 // DDlog workspace unmodified (this will change in future releases).
@@ -124,15 +126,15 @@ fn handle_event(ev: Event) -> anyhow::Result<()> {
     );
     if ev1.involved_object.kind.unwrap() == String::from("Pod") {
         let pod_name = ev1.involved_object.name.unwrap().clone();
-        let mut pod_obj = DDPod::default();
-        pod_obj.name = pod_name;
+        let mut pod_obj = pod::DDPod::default();
+        pod_obj.metadata.name = ddOption::from(Some(pod_name));
 
         unsafe {
             hddlog_g.transaction_start();
 
             let updates = vec![Update::Insert {
                 // We are going to insert..
-                relid: Relations::DDPod as RelId, // .. into relation with this Id.
+                relid: Relations::pod_DDPod as RelId, // .. into relation with this Id.
                 // `Word1` type, declared in the `types` crate has the same fields as
                 // the corresponding DDlog type.
                 v: pod_obj.into_ddvalue(),

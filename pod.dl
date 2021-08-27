@@ -1,0 +1,41 @@
+import affinity
+import intern
+
+typedef UID = UID{uid: string}
+
+// PodSpec -> https://docs.rs/k8s-openapi/0.13.0/k8s_openapi/api/core/v1/struct.PodSpec.html
+typedef PodSpec = PodSpec {
+    node_name: Option<string>,
+    affinity: Option<Affinity>,
+}
+
+// PodStatus -> https://docs.rs/k8s-openapi/0.13.0/k8s_openapi/api/core/v1/struct.PodStatus.html
+typedef PodStatus = PodStatus {
+    pod_ip: Option<string>,
+}
+
+typedef ObjectMeta = ObjectMeta {
+    cluster_name : Option<string>,
+    name: Option<string>,
+    // Since there won't be a lot of namespaces, interned string is
+    // an efficient representation.
+    namespace: IString,
+    // UID is the unique in time and space value for this object.
+    uid: UID,
+    // Map of string keys and values that can be used to organize and categorize
+    // (scope and select) objects. May match selectors of replication controllers
+    // and services.
+    // More info: http://kubernetes.io/docs/user-guide/labels
+    // +optional
+    labels: Option<Map<string, string>>,
+
+}
+
+// Pod -> https://docs.rs/k8s-openapi/0.13.0/k8s_openapi/api/core/v1/struct.Pod.html
+input relation &DDPod (
+    metadata : ObjectMeta,
+    // Pod specification
+    spec: PodSpec,
+    // Status of the Pod
+    status: PodStatus,
+)

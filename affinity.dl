@@ -1,0 +1,66 @@
+typedef i32 = bit<32>
+
+// NodeAffinity -> https://docs.rs/k8s-openapi/0.13.0/k8s_openapi/api/core/v1/struct.NodeAffinity.html
+typedef NodeAffinity = NodeAffinity {
+    preferred: Option<Vec<PreferredSchedulingTerm>>,
+    required: Option<NodeSelector>,
+}
+
+typedef PreferredSchedulingTerm = PreferredSchedulingTerm {
+    preference: NodeSelectorTerm,
+    weight: i32,
+}
+
+typedef NodeSelector = NodeSelector {
+    terms: Vec<NodeSelectorTerm>,
+}
+
+typedef NodeSelectorTerm = NodeSelectorTerm {
+    match_expressions: Option<Vec<NodeSelectorRequirement>>,
+    match_fields: Option<Vec<NodeSelectorRequirement>>,
+}
+
+typedef BaseSelectorRequirement = BaseSelectorRequirement {
+    key: string,
+    operator: string,
+    values: Option<Vec<string>>,
+}
+
+typedef NodeSelectorRequirement = BaseSelectorRequirement
+
+// PodAffinity -> https://docs.rs/k8s-openapi/0.13.0/k8s_openapi/api/core/v1/struct.PodAffinity.html
+typedef PodAffinity = PodAffinity {
+    preferred: Option<Vec<WeightedPodAffinityTerm>>,
+    required: Option<Vec<PodAffinityTerm>>,
+}
+
+typedef WeightedPodAffinityTerm = WeightedPodAffinityTerm {
+    pod_affinity_term : PodAffinityTerm,
+    weight : i32,
+}
+
+typedef PodAffinityTerm = PodAffinityTerm {
+    label_selector: Option<LabelSelector>,
+    namespace_selector: Option<LabelSelector>,
+    namespaces: Option<Vec<string>>,
+    topology_key: string,
+}
+
+typedef LabelSelector = LabelSelector {
+    match_expressions: Option<Vec<LabelSelectorRequirement>>,
+    // Internally in k8s, this is a BTreeMap
+    match_labels: Option<Map<string, string>>,
+}
+
+typedef LabelSelectorRequirement = BaseSelectorRequirement
+
+
+// PodAntiAffinity -> https://docs.rs/k8s-openapi/0.13.0/k8s_openapi/api/core/v1/struct.PodAntiAffinity.html
+typedef PodAntiAffinity = PodAffinity
+
+// Affinity -> https://docs.rs/k8s-openapi/0.13.0/k8s_openapi/api/core/v1/struct.Affinity.html
+typedef Affinity = Affinity {
+    node_affinity: Option<NodeAffinity>,
+    pod_affinity: Option<PodAffinity>,
+    pod_anti_affinity: PodAntiAffinity,
+}
