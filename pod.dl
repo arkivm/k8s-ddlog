@@ -1,5 +1,4 @@
 import affinity
-import intern
 
 typedef UID = UID{uid: string}
 
@@ -19,7 +18,7 @@ typedef ObjectMeta = ObjectMeta {
     name: Option<string>,
     // Since there won't be a lot of namespaces, interned string is
     // an efficient representation.
-    namespace: IString,
+    namespace: Option<string>,
     // UID is the unique in time and space value for this object.
     uid: UID,
     // Map of string keys and values that can be used to organize and categorize
@@ -32,7 +31,7 @@ typedef ObjectMeta = ObjectMeta {
 }
 
 // Pod -> https://docs.rs/k8s-openapi/0.13.0/k8s_openapi/api/core/v1/struct.Pod.html
-input relation &DDPod (
+input relation &Pod (
     metadata : ObjectMeta,
     // Pod specification
     spec: PodSpec,

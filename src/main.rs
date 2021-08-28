@@ -3,7 +3,7 @@ extern crate log;
 
 use color_eyre::Result;
 use futures::prelude::*;
-use k8s_openapi::api::core::v1::{Pod, Event};
+use k8s_openapi::api::core::v1::{Pod, Event, Affinity};
 use kube::{
     api::{ListParams, ResourceExt},
     Api, Client,
@@ -18,8 +18,11 @@ use kube_policy_ddlog as myddlog;
 use myddlog::Relations;
 
 // Type and function definitions generated for each ddlog program
-use myddlog::typedefs::*;
+mod ddtypes {
+    pub use kube_policy_ddlog::typedefs::*;
+}
 
+use myddlog::typedefs::ddlog_std::Vec as ddVec;
 use myddlog::typedefs::ddlog_std::Option as ddOption;
 
 // The differential_datalog crate contains the DDlog runtime that is
@@ -73,7 +76,7 @@ async fn pod_watcher() -> Result<()> {
     try_flatten_applied(watcher)
         .try_for_each(|p| async move {
             log::debug!("Applied: {}", p.name());
-            dump_pod_spec(&p);
+            inject_pod_relation(&p);
             if let Some(unready_reason) = pod_unready(&p) {
                 log::warn!("{}", unready_reason);
             }
@@ -81,6 +84,112 @@ async fn pod_watcher() -> Result<()> {
         })
         .await?;
     Ok(())
+}
+
+fn extract_affinity(af: &Affinity) -> ddOption<ddtypes::affinity::Affinity> {
+    let mut affinity = ddtypes::affinity::Affinity::default();
+
+    if let Some(node_affinity) = &af.node_affinity {
+        let mut dd_node_affinity = ddtypes::affinity::NodeAffinity::default();
+        if let Some(required) = &node_affinity.required_during_scheduling_ignored_during_execution {
+            let mut reqd_node_selector = ddtypes::affinity::NodeSelector::default();
+
+            for term in &required.node_selector_terms {
+                let mut dd_node_term = ddtypes::affinity::NodeSelectorTerm::default();
+
+                if let Some(match_exprs) = &term.match_expressions {
+                    let mut dd_match_exprs : ddVec<ddtypes::affinity::NodeSelectorRequirement> = ddVec::new();
+                    for expr in match_exprs {
+                        let mut dd_expr = ddtypes::affinity::NodeSelectorRequirement::default();
+                        dd_expr.key = expr.key.clone();
+                        dd_expr.operator = expr.operator.clone();
+
+                        let mut dd_values : ddVec<String> = ddVec::new();
+                        if let Some(values) = &expr.values {
+                            for value in values {
+                                dd_values.push(value.clone());
+                            }
+                            dd_expr.values = ddOption::from(Some(dd_values));
+                        }
+                        dd_match_exprs.push(dd_expr);
+                    }
+                    dd_node_term.match_expressions = ddOption::from(Some(dd_match_exprs));
+                }
+
+                if let Some(match_fields) = &term.match_fields {
+                    let mut dd_match_fields : ddVec<ddtypes::affinity::NodeSelectorRequirement> = ddVec::new();
+                    for expr in match_fields {
+                        let mut dd_expr = ddtypes::affinity::NodeSelectorRequirement::default();
+                        dd_expr.key = expr.key.clone();
+                        dd_expr.operator = expr.operator.clone();
+
+                        let mut dd_values : ddVec<String> = ddVec::new();
+                        if let Some(values) = &expr.values {
+                            for value in values {
+                                dd_values.push(value.clone());
+                            }
+                            dd_expr.values = ddOption::from(Some(dd_values));
+                        }
+                        dd_match_fields.push(dd_expr);
+                    }
+                    dd_node_term.match_fields = ddOption::from(Some(dd_match_fields));
+                }
+                reqd_node_selector.terms.push(dd_node_term);
+            }
+            dd_node_affinity.required = ddOption::from(Some(reqd_node_selector));
+        }
+        affinity.node_affinity = ddOption::from(Some(dd_node_affinity));
+    };
+
+
+    if let Some(pod_affinity) = &af.pod_affinity {
+    };
+
+    ddOption::from(Some(affinity))
+}
+
+fn extract_pod_object(p: &Pod) -> ddtypes::pod::Pod {
+    let pod_name = p.metadata.name.as_ref().unwrap().clone();
+    let mut pod_obj = ddtypes::pod::Pod::default();
+
+    pod_obj.metadata.cluster_name = ddOption::from(p.metadata.cluster_name.clone());
+    pod_obj.metadata.namespace = ddOption::from(p.metadata.namespace.clone());
+
+    if let Some(uid) = &p.metadata.uid {
+        pod_obj.metadata.uid = ddtypes::pod::UID{uid: p.metadata.uid.as_ref().unwrap().clone() };
+    };
+
+    if let Some(spec) = &p.spec {
+        pod_obj.spec.node_name = ddOption::from(spec.node_name.clone());
+
+        if let Some(aff) = &spec.affinity {
+            pod_obj.spec.affinity = extract_affinity(aff);
+        };
+    };
+
+    pod_obj
+}
+
+fn inject_pod_relation(p: &Pod) {
+    dump_pod_spec(&p);
+
+    let pod_obj = extract_pod_object(p);
+
+    unsafe {
+        hddlog_g.transaction_start();
+
+        let updates = vec![Update::Insert {
+            // We are going to insert..
+            relid: Relations::pod_Pod as RelId, // .. into relation with this Id.
+            // `Word1` type, declared in the `types` crate has the same fields as
+            // the corresponding DDlog type.
+            v: pod_obj.into_ddvalue(),
+        }];
+        hddlog_g.apply_updates(&mut updates.into_iter());
+
+        let mut delta = hddlog_g.transaction_commit_dump_changes().unwrap();
+        dump_delta(&hddlog_g, &delta);
+    }
 }
 
 fn dump_pod_spec(p: &Pod) {
@@ -126,15 +235,14 @@ fn handle_event(ev: Event) -> anyhow::Result<()> {
     );
     if ev1.involved_object.kind.unwrap() == String::from("Pod") {
         let pod_name = ev1.involved_object.name.unwrap().clone();
-        let mut pod_obj = pod::DDPod::default();
+        let mut pod_obj = ddtypes::pod::Pod::default();
         pod_obj.metadata.name = ddOption::from(Some(pod_name));
-
         unsafe {
             hddlog_g.transaction_start();
 
             let updates = vec![Update::Insert {
                 // We are going to insert..
-                relid: Relations::pod_DDPod as RelId, // .. into relation with this Id.
+                relid: Relations::pod_Pod as RelId, // .. into relation with this Id.
                 // `Word1` type, declared in the `types` crate has the same fields as
                 // the corresponding DDlog type.
                 v: pod_obj.into_ddvalue(),
