@@ -86,9 +86,7 @@ async fn pod_watcher() -> Result<()> {
     Ok(())
 }
 
-fn extract_affinity(af: &Affinity) -> ddOption<ddtypes::affinity::Affinity> {
-    let mut affinity = ddtypes::affinity::Affinity::default();
-
+fn extract_node_affinity(af: &Affinity) -> Option<ddtypes::affinity::NodeAffinity> {
     if let Some(node_affinity) = &af.node_affinity {
         let mut dd_node_affinity = ddtypes::affinity::NodeAffinity::default();
         if let Some(required) = &node_affinity.required_during_scheduling_ignored_during_execution {
@@ -138,12 +136,15 @@ fn extract_affinity(af: &Affinity) -> ddOption<ddtypes::affinity::Affinity> {
             }
             dd_node_affinity.required = ddOption::from(Some(reqd_node_selector));
         }
-        affinity.node_affinity = ddOption::from(Some(dd_node_affinity));
-    };
+        return Some(dd_node_affinity);
+    }
+    return None;
+}
 
+fn extract_affinity(af: &Affinity) -> ddOption<ddtypes::affinity::Affinity> {
+    let mut affinity = ddtypes::affinity::Affinity::default();
 
-    if let Some(pod_affinity) = &af.pod_affinity {
-    };
+    affinity.node_affinity = ddOption::from(extract_node_affinity(&af));
 
     ddOption::from(Some(affinity))
 }
