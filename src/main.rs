@@ -3,7 +3,8 @@ extern crate log;
 
 use color_eyre::Result;
 use futures::prelude::*;
-use k8s_openapi::api::core::v1::{Pod, Event, Affinity};
+use k8s_openapi::api::core::v1::{Pod, Event, Affinity, NodeSelector};
+use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
 use kube::{
     api::{ListParams, ResourceExt},
     Api, Client,
@@ -23,6 +24,7 @@ mod ddtypes {
 }
 
 use myddlog::typedefs::ddlog_std::Vec as ddVec;
+use myddlog::typedefs::ddlog_std::Map as ddMap;
 use myddlog::typedefs::ddlog_std::Option as ddOption;
 
 // The differential_datalog crate contains the DDlog runtime that is
@@ -141,10 +143,83 @@ fn extract_node_affinity(af: &Affinity) -> Option<ddtypes::affinity::NodeAffinit
     return None;
 }
 
+fn extract_label_selector(ls: &LabelSelector) -> ddOption<ddtypes::affinity::LabelSelector> {
+    let mut dd_label_selector = ddtypes::affinity::LabelSelector::default();
+
+    if let Some(match_exprs) = &ls.match_expressions {
+        let mut dd_match_exprs : ddVec<ddtypes::affinity::LabelSelectorRequirement> = ddVec::new();
+        for expr in match_exprs {
+            let mut dd_expr = ddtypes::affinity::LabelSelectorRequirement::default();
+            dd_expr.key = expr.key.clone();
+            dd_expr.operator = expr.operator.clone();
+
+            let mut dd_values : ddVec<String> = ddVec::new();
+            if let Some(values) = &expr.values {
+                for value in values {
+                    dd_values.push(value.clone());
+                }
+                dd_expr.values = ddOption::from(Some(dd_values));
+            }
+            dd_match_exprs.push(dd_expr);
+        }
+        dd_label_selector.match_expressions = ddOption::from(Some(dd_match_exprs));
+    }
+
+    if let Some(match_labels) = &ls.match_labels {
+        let mut dd_match_labels : ddMap<String, String> = ddMap::new();
+        for (k, v) in match_labels {
+            dd_match_labels.insert(k.clone(), v.clone());
+        }
+        dd_label_selector.match_labels = ddOption::from(Some(dd_match_labels));
+    }
+    ddOption::from(Some(dd_label_selector))
+}
+
+fn extract_pod_affinity(af: &Affinity) -> Option<ddtypes::affinity::PodAffinity> {
+    if let Some(pod_affinity) = &af.pod_affinity {
+        let mut dd_pod_affinity = ddtypes::affinity::PodAffinity::default();
+        if let Some(required) = &pod_affinity.required_during_scheduling_ignored_during_execution {
+            let mut pa_required : ddVec<ddtypes::affinity::PodAffinityTerm> = ddVec::new();
+
+            for term in required {
+                let mut dd_pod_term = ddtypes::affinity::PodAffinityTerm::default();
+
+                if let Some(lbl_selector) = &term.label_selector {
+                    dd_pod_term.label_selector = extract_label_selector(lbl_selector);
+                }
+
+                if let Some(ns_selector) = &term.namespace_selector {
+                    dd_pod_term.namespace_selector = extract_label_selector(ns_selector);
+                }
+
+                if let Some(ns_vec) = &term.namespaces {
+                    let mut namespaces : ddVec<String> = ddVec::new();
+                    for ns in ns_vec.iter() {
+                        namespaces.push(ns.to_string());
+                    }
+                    dd_pod_term.namespaces = ddOption::from(Some(namespaces));
+                }
+                dd_pod_term.topology_key = term.topology_key.clone();
+
+                pa_required.push(dd_pod_term);
+            }
+            dd_pod_affinity.required = ddOption::from(Some(pa_required));
+        }
+        return Some(dd_pod_affinity);
+    }
+    return None;
+}
+
+fn extract_pod_antiaffinity(af: &Affinity) -> Option<ddtypes::affinity::PodAffinity> {
+    extract_pod_affinity(af)
+}
+
 fn extract_affinity(af: &Affinity) -> ddOption<ddtypes::affinity::Affinity> {
     let mut affinity = ddtypes::affinity::Affinity::default();
 
     affinity.node_affinity = ddOption::from(extract_node_affinity(&af));
+    affinity.pod_affinity = ddOption::from(extract_pod_affinity(&af));
+    affinity.pod_anti_affinity = ddOption::from(extract_pod_antiaffinity(&af));
 
     ddOption::from(Some(affinity))
 }

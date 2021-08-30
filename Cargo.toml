@@ -9,7 +9,7 @@ edition = "2018"
 [dependencies]
 kube = "0.59.0"
 kube-runtime = "0.59.0"
-k8s-openapi = { version = "0.13.0", default-features = false, features = ["v1_20"] }
+k8s-openapi = { version = "0.13.0", default-features = false, features = ["v1_21"] }
 kube_policy = { path = "./kube_policy_ddlog" }
 differential_datalog = { path = "./kube_policy_ddlog/differential_datalog" }
 ddlog_rt = { path = "./kube_policy_ddlog/types/ddlog_rt" }

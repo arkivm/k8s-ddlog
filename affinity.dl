@@ -62,5 +62,5 @@ typedef PodAntiAffinity = PodAffinity
 typedef Affinity = Affinity {
     node_affinity: Option<NodeAffinity>,
     pod_affinity: Option<PodAffinity>,
-    pod_anti_affinity: PodAntiAffinity,
+    pod_anti_affinity: Option<PodAntiAffinity>,
 }
