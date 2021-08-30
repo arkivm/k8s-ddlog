@@ -69,13 +69,9 @@ use differential_datalog::record::UpdCmd; // Dynamically typed representation of
 
 use lazy_static::lazy_static;
 
-lazy_static! {
-    static ref hddlog_g: HDDlog = init_ddlog();
-}
+static mut hddlog_g: Option<HDDlog> = None;
 
 async fn pod_watcher() -> Result<()> {
-    std::env::set_var("RUST_LOG", "info,kube=debug");
-    env_logger::init();
     let client = Client::try_default().await?;
     let namespace = std::env::var("NAMESPACE").unwrap_or_else(|_| "default".into());
     let api = Api::<Pod>::namespaced(client, &namespace);
@@ -236,6 +232,7 @@ fn get_pod_object(p: &Pod) -> ddtypes::pod::Pod {
     let pod_name = p.metadata.name.as_ref().unwrap().clone();
     let mut pod_obj = ddtypes::pod::Pod::default();
 
+    pod_obj.metadata.name = ddOption::from(p.metadata.name.clone());
     pod_obj.metadata.cluster_name = ddOption::from(p.metadata.cluster_name.clone());
     pod_obj.metadata.namespace = ddOption::from(p.metadata.namespace.clone());
 
@@ -257,24 +254,26 @@ fn get_pod_object(p: &Pod) -> ddtypes::pod::Pod {
 }
 
 fn inject_pod_relation(p: &Pod) {
-    dump_pod_spec(&p);
+    //dump_pod_spec(&p);
+    log::debug!("injecting pod relation for {}", p.metadata.name.as_ref().unwrap().clone());
 
     let pod_obj = get_pod_object(p);
 
     unsafe {
-        hddlog_g.transaction_start();
+        let hddlog = hddlog_g.as_ref().unwrap();
+        hddlog.transaction_start().unwrap();
 
-        let updates = vec![Update::Insert {
-            // We are going to insert..
-            relid: Relations::pod_Pod as RelId, // .. into relation with this Id.
-            // `Word1` type, declared in the `types` crate has the same fields as
-            // the corresponding DDlog type.
+        let updates = vec![
+        Update::Insert {
+            relid: Relations::pod_Pod as RelId,
             v: pod_obj.into_ddvalue(),
-        }];
-        hddlog_g.apply_updates(&mut updates.into_iter());
+        },
+        ];
+        hddlog.apply_updates(&mut updates.into_iter()).unwrap();
 
-        let mut delta = hddlog_g.transaction_commit_dump_changes().unwrap();
-        dump_delta(&hddlog_g, &delta);
+        log::info!("Commiting changes");
+        let mut delta = hddlog.transaction_commit_dump_changes().unwrap();
+        dump_delta(&hddlog, &delta);
     }
 }
 
@@ -285,6 +284,12 @@ fn dump_pod_spec(p: &Pod) {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    std::env::set_var("RUST_LOG", "info,kube=debug");
+    env_logger::init();
+
+    unsafe {
+        hddlog_g = Some(init_ddlog());
+    }
     pod_watcher().await
 }
 
@@ -324,7 +329,8 @@ fn handle_event(ev: Event) -> anyhow::Result<()> {
         let mut pod_obj = ddtypes::pod::Pod::default();
         pod_obj.metadata.name = ddOption::from(Some(pod_name));
         unsafe {
-            hddlog_g.transaction_start();
+            let hddlog = hddlog_g.as_ref().unwrap();
+            hddlog.transaction_start();
 
             let updates = vec![Update::Insert {
                 // We are going to insert..
@@ -333,74 +339,25 @@ fn handle_event(ev: Event) -> anyhow::Result<()> {
                 // the corresponding DDlog type.
                 v: pod_obj.into_ddvalue(),
             }];
-            hddlog_g.apply_updates(&mut updates.into_iter());
+            hddlog.apply_updates(&mut updates.into_iter());
 
-            let mut delta = hddlog_g.transaction_commit_dump_changes().unwrap();
-            dump_delta(&hddlog_g, &delta);
+            let mut delta = hddlog.transaction_commit_dump_changes().unwrap();
+            dump_delta(&hddlog, &delta);
         }
     }
     Ok(())
 }
 
 // From https://github.com/vmware/differential-datalog/blob/master/test/datalog_tests/rust_api_test/src/main.rs
-//
 fn init_ddlog() -> HDDlog {
-    // Create a DDlog configuration with 1 worker thread and with the self-profiling feature
-    // enabled.
     let config = Config::new()
         .with_timely_workers(1)
         .with_profiling_config(ProfilingConfig::SelfProfiling);
-    // Instantiate the DDlog program with this configuration.
-    // The second argument of `run_with_config` is a Boolean flag that indicates
-    // whether DDlog will track the complete snapshot of output relations.  It
-    // should only be set for debugging in order to dump the contents of output
-    // tables using `HDDlog::dump_table()`.  Otherwise, indexes are the preferred
-    // way to achieve this.
     let (hddlog, init_state) = myddlog::run_with_config(config, false).unwrap();
 
-    // Alternatively, use `tutorial_ddlog::run` to instantiate the program with default
-    // configuration.  The first argument specifies the number of workers.
-
-    // let (hddlog, init_state) = tutorial_ddlog::run(1, false)? HDDlog,;
-
-    println!("Initial state");
     dump_delta(&hddlog, &init_state);
 
-    hddlog.transaction_start();
-
-    // A transaction can consist of multiple `apply_updates()` calls, each taking
-    // multiple updates.  An update inserts, deletes or modifies a record in a DDlog
-    // relation.
-    let updates = vec![
-        /*Update::Insert {
-            // We are going to insert..
-            relid: Relations::Word1 as RelId, // .. into relation with this Id.
-            // `Word1` type, declared in the `types` crate has the same fields as
-            // the corresponding DDlog type.
-            v: Word1 {
-                word: "foo-".to_string(),
-                cat: Category::CategoryOther,
-            }
-            .into_ddvalue(),
-        },
-        Update::Insert {
-            relid: Relations::Word2 as RelId,
-            v: Word2 {
-                word: "bar".to_string(),
-                cat: Category::CategoryOther,
-            }
-            .into_ddvalue(),
-        },
-        */
-    ];
-    hddlog.apply_updates(&mut updates.into_iter());
-
-    // Commit the transaction; returns a `DeltaMap` object that contains the set
-    // of changes to output relations produced by the transaction.
-    let mut delta = hddlog.transaction_commit_dump_changes().unwrap();
-    //assert_eq!(delta, delta_expected);
-
-    dump_delta(&hddlog, &delta);
+    log::info!("DDlog initialized!");
     hddlog
 }
 

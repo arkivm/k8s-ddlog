@@ -31,7 +31,7 @@ typedef ObjectMeta = ObjectMeta {
 }
 
 // Pod -> https://docs.rs/k8s-openapi/0.13.0/k8s_openapi/api/core/v1/struct.Pod.html
-input relation &Pod (
+input relation Pod (
     metadata : ObjectMeta,
     // Pod specification
     spec: PodSpec,
