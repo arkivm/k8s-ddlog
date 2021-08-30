@@ -3,13 +3,18 @@ extern crate log;
 
 use color_eyre::Result;
 use futures::prelude::*;
-use k8s_openapi::api::core::v1::{Pod, Event, Affinity, NodeSelector};
-use k8s_openapi::apimachinery::pkg::apis::meta::v1::LabelSelector;
+use k8s_openapi::{
+    api::core::v1::{
+        Affinity, Event, NodeAffinity, NodeSelector, NodeSelectorRequirement, NodeSelectorTerm,
+        Pod, PodAffinity, PodAffinityTerm,
+    },
+    apimachinery::pkg::apis::meta::v1::{LabelSelector, LabelSelectorRequirement},
+};
+
 use kube::{
     api::{ListParams, ResourceExt},
-    Api, Client,
+    Api, Client, Config as KubeConfig,
 };
-use kube::Config as KubeConfig;
 
 use kube_runtime::{utils::try_flatten_applied, watcher};
 
@@ -23,9 +28,9 @@ mod ddtypes {
     pub use kube_policy_ddlog::typedefs::*;
 }
 
-use myddlog::typedefs::ddlog_std::Vec as ddVec;
 use myddlog::typedefs::ddlog_std::Map as ddMap;
 use myddlog::typedefs::ddlog_std::Option as ddOption;
+use myddlog::typedefs::ddlog_std::Vec as ddVec;
 
 // The differential_datalog crate contains the DDlog runtime that is
 // the same for all DDlog programs and simply gets copied to each generated
@@ -88,53 +93,52 @@ async fn pod_watcher() -> Result<()> {
     Ok(())
 }
 
-fn extract_node_affinity(af: &Affinity) -> Option<ddtypes::affinity::NodeAffinity> {
+fn get_node_selector_requirement(
+    nsrq: &NodeSelectorRequirement,
+) -> ddtypes::affinity::NodeSelectorRequirement {
+    let mut dd_selreq = ddtypes::affinity::NodeSelectorRequirement::default();
+    dd_selreq.key = nsrq.key.clone();
+    dd_selreq.operator = nsrq.operator.clone();
+
+    let mut dd_values: ddVec<String> = ddVec::new();
+    if let Some(values) = &nsrq.values {
+        for value in values {
+            dd_values.push(value.clone());
+        }
+        dd_selreq.values = ddOption::from(Some(dd_values));
+    }
+    dd_selreq
+}
+
+fn get_node_selectorterm(nst: &NodeSelectorTerm) -> ddtypes::affinity::NodeSelectorTerm {
+    let mut dd_node_selterm = ddtypes::affinity::NodeSelectorTerm::default();
+
+    if let Some(match_exprs) = &nst.match_expressions {
+        let mut dd_match_exprs: ddVec<ddtypes::affinity::NodeSelectorRequirement> = ddVec::new();
+        for expr in match_exprs {
+            dd_match_exprs.push(get_node_selector_requirement(expr));
+        }
+        dd_node_selterm.match_expressions = ddOption::from(Some(dd_match_exprs));
+    }
+
+    if let Some(match_fields) = &nst.match_fields {
+        let mut dd_match_fields: ddVec<ddtypes::affinity::NodeSelectorRequirement> = ddVec::new();
+        for expr in match_fields {
+            dd_match_fields.push(get_node_selector_requirement(expr));
+        }
+        dd_node_selterm.match_fields = ddOption::from(Some(dd_match_fields));
+    }
+    dd_node_selterm
+}
+
+fn get_node_affinity(af: &Affinity) -> Option<ddtypes::affinity::NodeAffinity> {
     if let Some(node_affinity) = &af.node_affinity {
         let mut dd_node_affinity = ddtypes::affinity::NodeAffinity::default();
         if let Some(required) = &node_affinity.required_during_scheduling_ignored_during_execution {
             let mut reqd_node_selector = ddtypes::affinity::NodeSelector::default();
 
             for term in &required.node_selector_terms {
-                let mut dd_node_term = ddtypes::affinity::NodeSelectorTerm::default();
-
-                if let Some(match_exprs) = &term.match_expressions {
-                    let mut dd_match_exprs : ddVec<ddtypes::affinity::NodeSelectorRequirement> = ddVec::new();
-                    for expr in match_exprs {
-                        let mut dd_expr = ddtypes::affinity::NodeSelectorRequirement::default();
-                        dd_expr.key = expr.key.clone();
-                        dd_expr.operator = expr.operator.clone();
-
-                        let mut dd_values : ddVec<String> = ddVec::new();
-                        if let Some(values) = &expr.values {
-                            for value in values {
-                                dd_values.push(value.clone());
-                            }
-                            dd_expr.values = ddOption::from(Some(dd_values));
-                        }
-                        dd_match_exprs.push(dd_expr);
-                    }
-                    dd_node_term.match_expressions = ddOption::from(Some(dd_match_exprs));
-                }
-
-                if let Some(match_fields) = &term.match_fields {
-                    let mut dd_match_fields : ddVec<ddtypes::affinity::NodeSelectorRequirement> = ddVec::new();
-                    for expr in match_fields {
-                        let mut dd_expr = ddtypes::affinity::NodeSelectorRequirement::default();
-                        dd_expr.key = expr.key.clone();
-                        dd_expr.operator = expr.operator.clone();
-
-                        let mut dd_values : ddVec<String> = ddVec::new();
-                        if let Some(values) = &expr.values {
-                            for value in values {
-                                dd_values.push(value.clone());
-                            }
-                            dd_expr.values = ddOption::from(Some(dd_values));
-                        }
-                        dd_match_fields.push(dd_expr);
-                    }
-                    dd_node_term.match_fields = ddOption::from(Some(dd_match_fields));
-                }
-                reqd_node_selector.terms.push(dd_node_term);
+                reqd_node_selector.terms.push(get_node_selectorterm(term));
             }
             dd_node_affinity.required = ddOption::from(Some(reqd_node_selector));
         }
@@ -143,17 +147,17 @@ fn extract_node_affinity(af: &Affinity) -> Option<ddtypes::affinity::NodeAffinit
     return None;
 }
 
-fn extract_label_selector(ls: &LabelSelector) -> ddOption<ddtypes::affinity::LabelSelector> {
+fn get_label_selector(ls: &LabelSelector) -> ddOption<ddtypes::affinity::LabelSelector> {
     let mut dd_label_selector = ddtypes::affinity::LabelSelector::default();
 
     if let Some(match_exprs) = &ls.match_expressions {
-        let mut dd_match_exprs : ddVec<ddtypes::affinity::LabelSelectorRequirement> = ddVec::new();
+        let mut dd_match_exprs: ddVec<ddtypes::affinity::LabelSelectorRequirement> = ddVec::new();
         for expr in match_exprs {
             let mut dd_expr = ddtypes::affinity::LabelSelectorRequirement::default();
             dd_expr.key = expr.key.clone();
             dd_expr.operator = expr.operator.clone();
 
-            let mut dd_values : ddVec<String> = ddVec::new();
+            let mut dd_values: ddVec<String> = ddVec::new();
             if let Some(values) = &expr.values {
                 for value in values {
                     dd_values.push(value.clone());
@@ -166,7 +170,7 @@ fn extract_label_selector(ls: &LabelSelector) -> ddOption<ddtypes::affinity::Lab
     }
 
     if let Some(match_labels) = &ls.match_labels {
-        let mut dd_match_labels : ddMap<String, String> = ddMap::new();
+        let mut dd_match_labels: ddMap<String, String> = ddMap::new();
         for (k, v) in match_labels {
             dd_match_labels.insert(k.clone(), v.clone());
         }
@@ -175,33 +179,37 @@ fn extract_label_selector(ls: &LabelSelector) -> ddOption<ddtypes::affinity::Lab
     ddOption::from(Some(dd_label_selector))
 }
 
-fn extract_pod_affinity(af: &Affinity) -> Option<ddtypes::affinity::PodAffinity> {
+fn get_pod_affinity_term(pat: &PodAffinityTerm) -> ddtypes::affinity::PodAffinityTerm {
+    let mut dd_pod_term = ddtypes::affinity::PodAffinityTerm::default();
+
+    if let Some(lbl_selector) = &pat.label_selector {
+        dd_pod_term.label_selector = get_label_selector(lbl_selector);
+    }
+
+    if let Some(ns_selector) = &pat.namespace_selector {
+        dd_pod_term.namespace_selector = get_label_selector(ns_selector);
+    }
+
+    if let Some(ns_vec) = &pat.namespaces {
+        let mut namespaces: ddVec<String> = ddVec::new();
+        for ns in ns_vec.iter() {
+            namespaces.push(ns.to_string());
+        }
+        dd_pod_term.namespaces = ddOption::from(Some(namespaces));
+    }
+    dd_pod_term.topology_key = pat.topology_key.clone();
+
+    dd_pod_term
+}
+
+fn get_pod_affinity(af: &Affinity) -> Option<ddtypes::affinity::PodAffinity> {
     if let Some(pod_affinity) = &af.pod_affinity {
         let mut dd_pod_affinity = ddtypes::affinity::PodAffinity::default();
         if let Some(required) = &pod_affinity.required_during_scheduling_ignored_during_execution {
-            let mut pa_required : ddVec<ddtypes::affinity::PodAffinityTerm> = ddVec::new();
+            let mut pa_required: ddVec<ddtypes::affinity::PodAffinityTerm> = ddVec::new();
 
             for term in required {
-                let mut dd_pod_term = ddtypes::affinity::PodAffinityTerm::default();
-
-                if let Some(lbl_selector) = &term.label_selector {
-                    dd_pod_term.label_selector = extract_label_selector(lbl_selector);
-                }
-
-                if let Some(ns_selector) = &term.namespace_selector {
-                    dd_pod_term.namespace_selector = extract_label_selector(ns_selector);
-                }
-
-                if let Some(ns_vec) = &term.namespaces {
-                    let mut namespaces : ddVec<String> = ddVec::new();
-                    for ns in ns_vec.iter() {
-                        namespaces.push(ns.to_string());
-                    }
-                    dd_pod_term.namespaces = ddOption::from(Some(namespaces));
-                }
-                dd_pod_term.topology_key = term.topology_key.clone();
-
-                pa_required.push(dd_pod_term);
+                pa_required.push(get_pod_affinity_term(term));
             }
             dd_pod_affinity.required = ddOption::from(Some(pa_required));
         }
@@ -210,21 +218,21 @@ fn extract_pod_affinity(af: &Affinity) -> Option<ddtypes::affinity::PodAffinity>
     return None;
 }
 
-fn extract_pod_antiaffinity(af: &Affinity) -> Option<ddtypes::affinity::PodAffinity> {
-    extract_pod_affinity(af)
+fn get_pod_antiaffinity(af: &Affinity) -> Option<ddtypes::affinity::PodAffinity> {
+    get_pod_affinity(af)
 }
 
-fn extract_affinity(af: &Affinity) -> ddOption<ddtypes::affinity::Affinity> {
+fn get_affinity(af: &Affinity) -> ddOption<ddtypes::affinity::Affinity> {
     let mut affinity = ddtypes::affinity::Affinity::default();
 
-    affinity.node_affinity = ddOption::from(extract_node_affinity(&af));
-    affinity.pod_affinity = ddOption::from(extract_pod_affinity(&af));
-    affinity.pod_anti_affinity = ddOption::from(extract_pod_antiaffinity(&af));
+    affinity.node_affinity = ddOption::from(get_node_affinity(&af));
+    affinity.pod_affinity = ddOption::from(get_pod_affinity(&af));
+    affinity.pod_anti_affinity = ddOption::from(get_pod_antiaffinity(&af));
 
     ddOption::from(Some(affinity))
 }
 
-fn extract_pod_object(p: &Pod) -> ddtypes::pod::Pod {
+fn get_pod_object(p: &Pod) -> ddtypes::pod::Pod {
     let pod_name = p.metadata.name.as_ref().unwrap().clone();
     let mut pod_obj = ddtypes::pod::Pod::default();
 
@@ -232,14 +240,16 @@ fn extract_pod_object(p: &Pod) -> ddtypes::pod::Pod {
     pod_obj.metadata.namespace = ddOption::from(p.metadata.namespace.clone());
 
     if let Some(uid) = &p.metadata.uid {
-        pod_obj.metadata.uid = ddtypes::pod::UID{uid: p.metadata.uid.as_ref().unwrap().clone() };
+        pod_obj.metadata.uid = ddtypes::pod::UID {
+            uid: p.metadata.uid.as_ref().unwrap().clone(),
+        };
     };
 
     if let Some(spec) = &p.spec {
         pod_obj.spec.node_name = ddOption::from(spec.node_name.clone());
 
         if let Some(aff) = &spec.affinity {
-            pod_obj.spec.affinity = extract_affinity(aff);
+            pod_obj.spec.affinity = get_affinity(aff);
         };
     };
 
@@ -249,7 +259,7 @@ fn extract_pod_object(p: &Pod) -> ddtypes::pod::Pod {
 fn inject_pod_relation(p: &Pod) {
     dump_pod_spec(&p);
 
-    let pod_obj = extract_pod_object(p);
+    let pod_obj = get_pod_object(p);
 
     unsafe {
         hddlog_g.transaction_start();
