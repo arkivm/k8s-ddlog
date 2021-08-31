@@ -7,6 +7,7 @@ use k8s_openapi::{
     api::core::v1::{
         Affinity, Event, NodeAffinity, NodeSelector, NodeSelectorRequirement, NodeSelectorTerm,
         Pod, PodAffinity, PodAffinityTerm,
+        Node,
     },
     apimachinery::pkg::apis::meta::v1::{LabelSelector, LabelSelectorRequirement},
 };
@@ -68,6 +69,8 @@ use differential_datalog::record::RelIdentifier; // Relation identifier: either 
 use differential_datalog::record::UpdCmd; // Dynamically typed representation of DDlog command.
 
 use lazy_static::lazy_static;
+use std::thread;
+
 
 static mut hddlog_g: Option<HDDlog> = None;
 
@@ -80,9 +83,6 @@ async fn pod_watcher() -> Result<()> {
         .try_for_each(|p| async move {
             log::debug!("Applied: {}", p.name());
             inject_pod_relation(&p);
-            if let Some(unready_reason) = pod_unready(&p) {
-                log::warn!("{}", unready_reason);
-            }
             Ok(())
         })
         .await?;
@@ -237,7 +237,7 @@ fn get_pod_object(p: &Pod) -> ddtypes::pod::Pod {
     pod_obj.metadata.namespace = ddOption::from(p.metadata.namespace.clone());
 
     if let Some(uid) = &p.metadata.uid {
-        pod_obj.metadata.uid = ddtypes::pod::UID {
+        pod_obj.metadata.uid = ddtypes::metadata::UID {
             uid: p.metadata.uid.as_ref().unwrap().clone(),
         };
     };
@@ -290,7 +290,9 @@ async fn main() -> Result<()> {
     unsafe {
         hddlog_g = Some(init_ddlog());
     }
-    pod_watcher().await
+    let pod_watcher = pod_watcher().await;
+    println!("await pod_watcher");
+    pod_watcher
 }
 
 async fn event_watcher() -> anyhow::Result<()> {
@@ -371,23 +373,4 @@ fn dump_delta(ddlog: &HDDlog, delta: &DeltaMap<DDValue>) {
             info!("{} {:+}", val, weight);
         }
     }
-}
-
-fn pod_unready(p: &Pod) -> Option<String> {
-    let status = p.status.as_ref().unwrap();
-    if let Some(conds) = &status.conditions {
-        let failed = conds
-            .into_iter()
-            .filter(|c| c.type_ == "Ready" && c.status == "False")
-            .map(|c| c.message.clone().unwrap_or_default())
-            .collect::<Vec<_>>()
-            .join(",");
-        if !failed.is_empty() {
-            if p.metadata.labels.as_ref().unwrap().contains_key("job-name") {
-                return None; // ignore job based pods, they are meant to exit 0
-            }
-            return Some(format!("Unready pod {}: {}", p.name(), failed));
-        }
-    }
-    None
 }

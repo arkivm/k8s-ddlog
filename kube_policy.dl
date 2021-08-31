@@ -1,7 +1,8 @@
-
+import node
 import pod
 
 output relation PodExists(name: string, status: string)
+output relation NodeExists(name: string, status: string)
 
 PodExists(name, status) :-
             Pod(meta, _, pstatus),
@@ -9,9 +10,34 @@ PodExists(name, status) :-
             var status = pstatus.pod_ip.unwrap_or_default().
 
 
+NodeExists(name, status) :-
+            Node(meta, _, nstatus),
+            var name = meta.name.unwrap_or_default(),
+            var status = nstatus.node_info.unwrap_or_default().system_uuid.
+
 output relation PodOnNode(pod_id: string, node_id: string)
 
 PodOnNode(pod_id, node_id) :-
     Pod(meta, spec, _),
     var pod_id = meta.name.unwrap_or_default(),
     var node_id = spec.node_name.unwrap_or_default().
+
+/*
+output relation NodeAffinitySatisfied(pod_id)
+
+NodeAffinitySatisfied(pod_id) :-
+*/
+// I probably oversimplified this a bit too much.
+// We need to do PodAffinitySatisfied  check for each PodAffinityTerm
+// of the pod and then aggregate to check that all affinity constraints are satisfied.
+/*
+relation PodAffinitySatisfied(pod_id)
+
+PodAffinitySatisfied(pod.id) :-
+    Pod(meta, _, pstatus),
+    PodOnNode(pod.id, node_id),
+    PodOnNode(other_pod_id, node_id),
+    other_pod_id != pod.id,
+    other_pod in Pod(.id = other_pod_id),
+    check_pod_affinity(pod, other_pod).
+*/

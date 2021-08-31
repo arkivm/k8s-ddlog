@@ -1,0 +1,24 @@
+import metadata
+
+// NodeSpec -> https://docs.rs/k8s-openapi/0.13.0/k8s_openapi/api/core/v1/struct.NodeSpec.html
+typedef NodeSpec = NodeSpec {
+    pod_cidr: Option<string>,
+}
+
+// NodeSystemInfo -> https://docs.rs/k8s-openapi/0.13.0/k8s_openapi/api/core/v1/struct.NodeSystemInfo.html
+typedef NodeSystemInfo = NodeSystemInfo {
+    system_uuid : string,
+}
+
+// NodeStatus -> https://docs.rs/k8s-openapi/0.13.0/k8s_openapi/api/core/v1/struct.NodeStatus.html
+typedef NodeStatus = NodeStatus {
+    node_info: Option<NodeSystemInfo>,
+}
+
+input relation Node (
+    metadata : ObjectMeta,
+    // Node specification
+    spec: NodeSpec,
+    // Status of the Node
+    status: NodeStatus,
+)
