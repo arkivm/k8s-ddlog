@@ -3,7 +3,15 @@ import pod
 
 output relation PodExists(name: string, status: string)
 
-PodExists(name: string, status: string) :-
+PodExists(name, status) :-
             Pod(meta, _, pstatus),
             var name = meta.name.unwrap_or_default(),
             var status = pstatus.pod_ip.unwrap_or_default().
+
+
+output relation PodOnNode(pod_id: string, node_id: string)
+
+PodOnNode(pod_id, node_id) :-
+    Pod(meta, spec, _),
+    var pod_id = meta.name.unwrap_or_default(),
+    var node_id = spec.node_name.unwrap_or_default().
