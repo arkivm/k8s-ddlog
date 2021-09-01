@@ -61,11 +61,6 @@ pub use differential_datalog::ddval::DDValue;
 pub use differential_datalog::program::RelId; // Numeric relations id.
 pub use differential_datalog::program::Update; // Type-safe representation of a DDlog command (insert/delete_val/delete_key/...)
 
-// The `record` module defines dynamically typed representation of DDlog values and commands.
-use differential_datalog::record::Record; // Dynamically typed representation of DDlog values.
-use differential_datalog::record::RelIdentifier; // Relation identifier: either `RelId` or `Cow<str>`g.
-use differential_datalog::record::UpdCmd; // Dynamically typed representation of DDlog command.
-
 use lazy_static::lazy_static;
 use std::sync::Mutex;
 

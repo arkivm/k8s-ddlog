@@ -45,6 +45,29 @@ pub async fn node_watcher() -> Result<()> {
 
 fn get_node_object(n: &Node) -> node::Node {
     let mut node_obj = node::Node::default();
+
+    node_obj.metadata.name = ddOption::from(n.metadata.name.clone());
+    node_obj.metadata.cluster_name = ddOption::from(n.metadata.cluster_name.clone());
+    node_obj.metadata.namespace = ddOption::from(n.metadata.namespace.clone());
+
+    if let Some(uid) = &n.metadata.uid {
+        node_obj.metadata.uid = metadata::UID {
+            uid: uid.clone(),
+        };
+    };
+
+    if let Some(spec) = &n.spec {
+        if let Some(pod_cidr) = &spec.pod_cidr {
+            node_obj.spec.pod_cidr = ddOption::from(Some(pod_cidr.clone()));
+        }
+    };
+
+    /*if let Some(status) = &n.status {
+        if let Some(node_info) = &status.node_info {
+            node_obj.status.node_info.system_uuid = node_info.system_uuid.clone();
+        }
+    };*/
+
     node_obj
 }
 

@@ -187,7 +187,6 @@ fn get_affinity(af: &Affinity) -> ddOption<affinity::Affinity> {
 }
 
 fn get_pod_object(p: &Pod) -> pod::Pod {
-    let pod_name = p.metadata.name.as_ref().unwrap().clone();
     let mut pod_obj = pod::Pod::default();
 
     pod_obj.metadata.name = ddOption::from(p.metadata.name.clone());
@@ -196,7 +195,7 @@ fn get_pod_object(p: &Pod) -> pod::Pod {
 
     if let Some(uid) = &p.metadata.uid {
         pod_obj.metadata.uid = metadata::UID {
-            uid: p.metadata.uid.as_ref().unwrap().clone(),
+            uid: uid.clone(),
         };
     };
 
