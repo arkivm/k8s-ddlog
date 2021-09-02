@@ -12,6 +12,7 @@ use crate::{
     RelId,
     Update,
     Result,
+    get_object_metadata,
 };
 
 use crate::ddtypes::*;
@@ -22,7 +23,7 @@ use k8s_openapi::{
         Pod, PodAffinity, PodAffinityTerm,
         Node,
     },
-    apimachinery::pkg::apis::meta::v1::{LabelSelector, LabelSelectorRequirement},
+    apimachinery::pkg::apis::meta::v1::{LabelSelector, LabelSelectorRequirement, ObjectMeta},
 };
 
 use kube::{
@@ -189,15 +190,7 @@ fn get_affinity(af: &Affinity) -> ddOption<affinity::Affinity> {
 fn get_pod_object(p: &Pod) -> pod::Pod {
     let mut pod_obj = pod::Pod::default();
 
-    pod_obj.metadata.name = ddOption::from(p.metadata.name.clone());
-    pod_obj.metadata.cluster_name = ddOption::from(p.metadata.cluster_name.clone());
-    pod_obj.metadata.namespace = ddOption::from(p.metadata.namespace.clone());
-
-    if let Some(uid) = &p.metadata.uid {
-        pod_obj.metadata.uid = metadata::UID {
-            uid: uid.clone(),
-        };
-    };
+    pod_obj.metadata = get_object_metadata(&p.metadata);
 
     if let Some(spec) = &p.spec {
         pod_obj.spec.node_name = ddOption::from(spec.node_name.clone());

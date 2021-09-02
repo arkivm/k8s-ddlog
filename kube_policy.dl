@@ -1,6 +1,7 @@
 import node
 import pod
 import metadata
+import affinity
 
 output relation PodExists(name: string, status: string)
 output relation NodeExists(name: string, status: string)
@@ -25,15 +26,32 @@ PodOnNode(pod_id, node_id) :-
 
 output relation NodeAffinitySatisfied(pod_id : string)
 
-function check_node_affinity(pod : Pod, node : Node) : bool {
-    pod.spec.node_name.unwrap_or_default() == node.metadata.name.unwrap_or_default()
+function check_node_affinity(pod : Pod, node : Node) : Option<bool> {
+    var node_sel = pod.spec.affinity?.node_affinity?.required?;
+    for (term in node_sel.terms) {
+      for (expr in term.match_expressions?) {
+          match (expr.operator) {
+            "In" -> {
+
+            },
+            _ -> { },
+
+          };
+      };
+    };
+    var ret = if (pod.spec.node_name.unwrap_or_default() == node.metadata.name.unwrap_or_default()) {
+      Some{(true)}
+    } else {
+      None
+    };
+    ret
 }
 
 NodeAffinitySatisfied(pod_id) :-
     PodOnNode(pod_id, node_id),
     pod in Pod(.metadata = ObjectMeta{.name = Some{pod_id}}),
     node in Node(.metadata = ObjectMeta{.name = Some{node_id}}),
-    check_node_affinity(pod, node).
+    check_node_affinity(pod, node).unwrap_or_default().
 
 // I probably oversimplified this a bit too much.
 // We need to do PodAffinitySatisfied  check for each PodAffinityTerm

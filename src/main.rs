@@ -66,6 +66,9 @@ use std::sync::Mutex;
 
 mod pod;
 mod node;
+mod common;
+
+pub use common::get_object_metadata;
 
 use pod::pod_watcher;
 use node::node_watcher;

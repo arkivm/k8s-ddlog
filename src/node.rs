@@ -12,6 +12,7 @@ use crate::{
     RelId,
     Update,
     Result,
+    get_object_metadata,
 };
 
 use crate::ddtypes::*;
@@ -46,15 +47,7 @@ pub async fn node_watcher() -> Result<()> {
 fn get_node_object(n: &Node) -> node::Node {
     let mut node_obj = node::Node::default();
 
-    node_obj.metadata.name = ddOption::from(n.metadata.name.clone());
-    node_obj.metadata.cluster_name = ddOption::from(n.metadata.cluster_name.clone());
-    node_obj.metadata.namespace = ddOption::from(n.metadata.namespace.clone());
-
-    if let Some(uid) = &n.metadata.uid {
-        node_obj.metadata.uid = metadata::UID {
-            uid: uid.clone(),
-        };
-    };
+    node_obj.metadata = get_object_metadata(&n.metadata);
 
     if let Some(spec) = &n.spec {
         if let Some(pod_cidr) = &spec.pod_cidr {
