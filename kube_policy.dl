@@ -30,13 +30,13 @@ function check_node_affinity(pod : Pod, node : Node) : Option<bool> {
     var node_sel = pod.spec.affinity?.node_affinity?.required?;
     for (term in node_sel.terms) {
       for (expr in term.match_expressions?) {
-          match (expr.operator) {
+          /*match (expr.operator) {
             "In" -> {
 
             },
             _ -> { },
 
-          };
+          };*/
       };
     };
     var ret = if (pod.spec.node_name.unwrap_or_default() == node.metadata.name.unwrap_or_default()) {
@@ -62,20 +62,14 @@ function get_satisfied_affinity_terms(pod : Pod, other_pod : Pod, node : Node) :
   var node_labels = node.metadata.labels.unwrap_or_default();
 
   for (term in pa_terms) {
-      // if topology_key doesn't match, can we return early?
-      if (node_labels.contains_key(term.topology_key) == false) {
-          continue
-      };
-
-      /*for (expr in term.label_selector.unwrap_or_default().match_expressions.unwrap_or_default()) {
-          match (expr.operator) {
-            "In" ->  {
-            },
-            _ -> { },
-
-          };
-      };*/
+    // if topology_key doesn't match, can we return early?
+    if (node_labels.contains_key(term.topology_key) == false) {
+      continue
     };
+    if (labelSelectorMatches(term.label_selector, other_pod.metadata.labels.unwrap_or_default())) {
+      s.insert(term)
+    }
+  };
   s
 }
 

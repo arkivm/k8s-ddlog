@@ -48,12 +48,22 @@ pub async fn pod_watcher() -> Result<()> {
     Ok(())
 }
 
+fn operator_to_enum(op : String) -> affinity::LabelSelectorOperator {
+    match op.as_ref() {
+        "In" => affinity::LabelSelectorOperator::LabelSelectorOpIn,
+        "NotIn" => affinity::LabelSelectorOperator::LabelSelectorOpNotIn,
+        "Exists" => affinity::LabelSelectorOperator::LabelSelectorOpExists,
+        "DoesNotExist" => affinity::LabelSelectorOperator::LabelSelectorOpDoesNotExist,
+        _ => panic!("Unhandled"),
+    }
+}
+
 fn get_node_selector_requirement(
     nsrq: &NodeSelectorRequirement,
 ) -> affinity::NodeSelectorRequirement {
     let mut dd_selreq = affinity::NodeSelectorRequirement::default();
     dd_selreq.key = nsrq.key.clone();
-    dd_selreq.operator = nsrq.operator.clone();
+    dd_selreq.operator = operator_to_enum(nsrq.operator.clone());
 
     let mut dd_values: ddVec<String> = ddVec::new();
     if let Some(values) = &nsrq.values {
@@ -110,7 +120,7 @@ fn get_label_selector(ls: &LabelSelector) -> ddOption<affinity::LabelSelector> {
         for expr in match_exprs {
             let mut dd_expr = affinity::LabelSelectorRequirement::default();
             dd_expr.key = expr.key.clone();
-            dd_expr.operator = expr.operator.clone();
+            dd_expr.operator = operator_to_enum(expr.operator.clone());
 
             let mut dd_values: ddVec<String> = ddVec::new();
             if let Some(values) = &expr.values {

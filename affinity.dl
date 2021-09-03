@@ -22,7 +22,7 @@ typedef NodeSelectorTerm = NodeSelectorTerm {
 
 typedef BaseSelectorRequirement = BaseSelectorRequirement {
     key: string,
-    operator: string,
+    operator: LabelSelectorOperator,
     values: Option<Vec<string>>,
 }
 
@@ -64,3 +64,74 @@ typedef Affinity = Affinity {
     pod_affinity: Option<PodAffinity>,
     pod_anti_affinity: Option<PodAntiAffinity>,
 }
+
+// From https://github.com/vmware/differential-datalog/blob/a7f5f7d37dad1794fda04020d1893e154620407e/test/antrea/k8spolicy.dl
+// A label selector operator is the set of operators that can be used in a selector requirement.
+typedef LabelSelectorOperator = LabelSelectorOpIn
+                              | LabelSelectorOpNotIn
+                              | LabelSelectorOpExists
+                              | LabelSelectorOpDoesNotExist
+
+// DDlog looks for a function with this name when converting
+// LabelSelectorOperator to string.
+function to_string(op: LabelSelectorOperator): string =
+{
+    match (op) {
+        LabelSelectorOpIn           -> "In",
+        LabelSelectorOpNotIn        -> "NotIn",
+        LabelSelectorOpExists       -> "Exists",
+        LabelSelectorOpDoesNotExist -> "DoesNotExist"
+    }
+}
+
+/* The native Antrea implementation converts LabelSelector to a generic selector
+ * struct before . */
+// Matches returns true if the Requirement matches the input Labels.
+// There is a match in the following cases:
+// (1) The operator is Exists and Labels has the Requirement's key.
+// (2) The operator is In, Labels has the Requirement's key and Labels'
+//     value for that key is in Requirement's value set.
+// (3) The operator is NotIn, Labels has the Requirement's key and
+//     Labels' value for that key is not in Requirement's value set.
+// (4) The operator is DoesNotExist or NotIn and Labels does not have the
+//     Requirement's key.
+function labelSelectorMatches(selector: Option<LabelSelector>, labels: Map<string, string>): bool =
+{
+    match (selector) {
+        None -> false,
+        Some{sel} -> {
+            var match_labels = sel.match_labels.unwrap_or_default();
+            var match_expressions = sel.match_expressions.unwrap_or_default();
+
+            if (map_is_empty(match_labels) and vec_is_empty(match_expressions)) {
+                true
+            } else {
+                for (lab in match_labels) {
+                    if (map_get(labels, lab.0) != Some{lab.1}) { return false }
+                };
+                for (e in match_expressions) {
+                    var values = e.values.unwrap_or_default();
+                    var matches = match (e.operator) {
+                        LabelSelectorOpIn -> {
+                            match (map_get(labels, e.key)) {
+                                None -> false,
+                                Some{val} -> vec_contains(values, val)
+                            }
+                        },
+                        LabelSelectorOpNotIn -> {
+                            match (map_get(labels, e.key)) {
+                                None -> true,
+                                Some{val} -> not vec_contains(values, val)
+                            }
+                        },
+                        LabelSelectorOpExists -> map_contains_key(labels, e.key),
+                        LabelSelectorOpDoesNotExist -> not map_contains_key(labels, e.key)
+                    };
+                    if (not matches) { return false }
+                };
+                true
+            }
+        }
+    }
+}
+
