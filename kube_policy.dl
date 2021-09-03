@@ -53,17 +53,45 @@ NodeAffinitySatisfied(pod_id) :-
     node in Node(.metadata = ObjectMeta{.name = Some{node_id}}),
     check_node_affinity(pod, node).unwrap_or_default().
 
-// I probably oversimplified this a bit too much.
-// We need to do PodAffinitySatisfied  check for each PodAffinityTerm
-// of the pod and then aggregate to check that all affinity constraints are satisfied.
-/*
-relation PodAffinitySatisfied(pod_id)
+relation PodAffinityTermSatisfied(pod_id : string, terms : Set<PodAffinityTerm>)
 
-PodAffinitySatisfied(pod.id) :-
-    Pod(meta, _, pstatus),
-    PodOnNode(pod.id, node_id),
+function get_satisfied_affinity_terms(pod : Pod, other_pod : Pod, node : Node) : Set<PodAffinityTerm> {
+  var s : Set<PodAffinityTerm> = default();
+  var pa_terms = pod.spec.affinity.unwrap_or_default().pod_affinity.unwrap_or_default().required.unwrap_or_default();
+
+  var node_labels = node.metadata.labels.unwrap_or_default();
+
+  for (term in pa_terms) {
+      // if topology_key doesn't match, can we return early?
+      if (node_labels.contains_key(term.topology_key) == false) {
+          continue
+      };
+
+      /*for (expr in term.label_selector.unwrap_or_default().match_expressions.unwrap_or_default()) {
+          match (expr.operator) {
+            "In" ->  {
+            },
+            _ -> { },
+
+          };
+      };*/
+    };
+  s
+}
+
+PodAffinityTermSatisfied(pod_id, terms) :-
+    PodOnNode(pod_id, node_id),
     PodOnNode(other_pod_id, node_id),
-    other_pod_id != pod.id,
-    other_pod in Pod(.id = other_pod_id),
-    check_pod_affinity(pod, other_pod).
-*/
+    other_pod_id != pod_id,
+    other_pod in Pod(.metadata = ObjectMeta{.name = Some{other_pod_id}}),
+    pod in Pod(.metadata = ObjectMeta{.name = Some{pod_id}}),
+    node in Node(.metadata = ObjectMeta{.name = Some{node_id}}),
+    var terms = get_satisfied_affinity_terms(pod, other_pod, node).
+
+relation PodAffinitySatisfied(pod_id : string)
+
+PodAffinitySatisfied(pod_id) :-
+    PodAffinityTermSatisfied(pod_id, terms),
+    var all_satisfied_terms = terms.group_by(pod_id).union(),
+    Pod(.metadata = ObjectMeta{.name = Some{pod_id}}, .spec= PodSpec{.affinity=Some{Affinity{.pod_affinity={Some{PodAffinity{.required=Some{pod_af_terms}}}}}}}),
+    pod_af_terms.to_set() == all_satisfied_terms.
