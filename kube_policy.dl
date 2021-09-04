@@ -2,6 +2,7 @@ import node
 import pod
 import metadata
 import affinity
+import print
 
 output relation PodExists(name: string, status: string)
 output relation NodeExists(name: string, status: string)
@@ -53,14 +54,15 @@ NodeAffinitySatisfied(pod_id) :-
     node in Node(.metadata = ObjectMeta{.name = Some{node_id}}),
     check_node_affinity(pod, node).unwrap_or_default().
 
-relation PodAffinityTermSatisfied(pod_id : string, terms : Set<PodAffinityTerm>)
+output relation PodAffinityTermSatisfied(pod_id : string, terms : Set<PodAffinityTerm>)
 
 function get_satisfied_affinity_terms(pod : Pod, other_pod : Pod, node : Node) : Set<PodAffinityTerm> {
   var s : Set<PodAffinityTerm> = default();
   var pa_terms = pod.spec.affinity.unwrap_or_default().pod_affinity.unwrap_or_default().required.unwrap_or_default();
 
   var node_labels = node.metadata.labels.unwrap_or_default();
-
+  print("checking");
+  print(node.to_string_debug());
   for (term in pa_terms) {
     // if topology_key doesn't match, can we return early?
     if (node_labels.contains_key(term.topology_key) == false) {
@@ -82,7 +84,7 @@ PodAffinityTermSatisfied(pod_id, terms) :-
     node in Node(.metadata = ObjectMeta{.name = Some{node_id}}),
     var terms = get_satisfied_affinity_terms(pod, other_pod, node).
 
-relation PodAffinitySatisfied(pod_id : string)
+output relation PodAffinitySatisfied(pod_id : string)
 
 PodAffinitySatisfied(pod_id) :-
     PodAffinityTermSatisfied(pod_id, terms),
