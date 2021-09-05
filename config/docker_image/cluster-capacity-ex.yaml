@@ -1,0 +1,22 @@
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: cluster-capacity
+  labels:
+    name: cluster-capacity
+spec:
+  containers:
+  - name: cluster-capacity
+    image: gofed/cluster-capacity
+    command:
+    - "/bin/sh"
+    - "-ec"
+    - |
+      echo "Generating pod"
+      /bin/genpod --namespace=cluster-capacity >> /pod.yaml
+      cat /pod.yaml
+      echo "Running cluster capacity framework"
+      /bin/cluster-capacity --period=1 --podspec=/pod.yaml --default-config /config/default-scheduler.yaml
+    ports:
+    - containerPort: 8081
