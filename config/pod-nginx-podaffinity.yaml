@@ -18,8 +18,4 @@ spec:
             operator: In
             values:
             - S1
-          - key: security
-            operator: NotIn
-            values:
-            - S2
         topologyKey: topology.kubernetes.io/zone

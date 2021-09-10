@@ -91,3 +91,9 @@ PodAffinitySatisfied(pod_id) :-
     var all_satisfied_terms = terms.group_by(pod_id).union(),
     Pod(.metadata = ObjectMeta{.name = Some{pod_id}}, .spec= PodSpec{.affinity=Some{Affinity{.pod_affinity={Some{PodAffinity{.required=Some{pod_af_terms}}}}}}}),
     pod_af_terms.to_set() == all_satisfied_terms.
+
+output relation PodAffinityViolated(pod_id: string)
+
+PodAffinityViolated(pod_id) :-
+    pod in Pod(.metadata = ObjectMeta{.name = Some{pod_id}}),
+    not PodAffinitySatisfied(pod_id).

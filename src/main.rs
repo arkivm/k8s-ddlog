@@ -91,18 +91,25 @@ fn perform_hddlog_transaction(updates: Vec<Update<DDValue>>) {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    std::env::set_var("RUST_LOG", "info,kube=debug");
+    std::env::set_var("RUST_LOG", "info,kube=info");
     env_logger::init();
+    let args: Vec<String> = std::env::args().collect();
 
-    let pw_join = tokio::spawn(async {
-        println!("await pod_watcher");
-        pod_watcher().await;
-    });
+    let num_pods = args[1].parse().unwrap();
 
     let node_join = tokio::spawn(async {
         println!("await node_watcher");
         node_watcher().await;
     });
+
+    std::thread::sleep(std::time::Duration::from_millis(100));
+
+    let pw_join = tokio::spawn(async move {
+        let num_pods_1 = num_pods;
+        println!("await pod_watcher");
+        pod_watcher(num_pods_1).await;
+    });
+
 
     tokio::join!(
         pw_join,
