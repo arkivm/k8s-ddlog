@@ -1,0 +1,60 @@
+await pod_watcher
+await node_watcher
+[2021-09-07T18:28:51Z DEBUG kube::client] HTTP; http.method=GET http.url=https://127.0.0.1:50063/api/v1/namespaces/default/pods? otel.name="list" otel.kind="client"
+[2021-09-07T18:28:51Z DEBUG kube::client] HTTP; http.method=GET http.url=https://127.0.0.1:50063/api/v1/nodes? otel.name="list" otel.kind="client"
+[2021-09-07T18:28:51Z DEBUG kube::client] requesting 
+[2021-09-07T18:28:51Z DEBUG kube::client] requesting 
+[2021-09-07T18:28:51Z DEBUG kube::client] HTTP; http.status_code=200
+[2021-09-07T18:28:51Z INFO  informer_rs::node] injecting node relation for dev-control-plane
+[2021-09-07T18:28:51Z INFO  informer_rs] DDlog initialized!
+[2021-09-07T18:28:51Z INFO  informer_rs] Commiting changes
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation NodeExists
+[2021-09-07T18:28:51Z INFO  informer_rs] NodeExists{.name = "dev-control-plane", .status = ""} +1
+[2021-09-07T18:28:51Z INFO  informer_rs::node] injecting node relation for dev-worker
+[2021-09-07T18:28:51Z INFO  informer_rs] Commiting changes
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation NodeExists
+[2021-09-07T18:28:51Z INFO  informer_rs] NodeExists{.name = "dev-worker", .status = ""} +1
+[2021-09-07T18:28:51Z INFO  informer_rs::node] injecting node relation for dev-worker2
+[2021-09-07T18:28:51Z INFO  informer_rs] Commiting changes
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation NodeExists
+[2021-09-07T18:28:51Z INFO  informer_rs] NodeExists{.name = "dev-worker2", .status = ""} +1
+[2021-09-07T18:28:51Z DEBUG kube::client] HTTP; http.method=GET http.url=https://127.0.0.1:50063/api/v1/nodes?&watch=true&resourceVersion=547860&timeoutSeconds=290&allowWatchBookmarks=true otel.name="watch" otel.kind="client"
+[2021-09-07T18:28:51Z DEBUG kube::client] requesting 
+[2021-09-07T18:28:51Z DEBUG kube::client] HTTP; http.status_code=200
+[2021-09-07T18:28:51Z DEBUG kube::client] HTTP; http.status_code=200
+[2021-09-07T18:28:51Z INFO  informer_rs] Commiting changes
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation PodAffinityViolated
+[2021-09-07T18:28:51Z INFO  informer_rs] PodAffinityViolated{.pod_id = "nginx-with-pod-affinity"} +1
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation PodExists
+[2021-09-07T18:28:51Z INFO  informer_rs] PodExists{.name = "nginx-with-pod-affinity", .status = ""} +1
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation PodOnNode
+[2021-09-07T18:28:51Z INFO  informer_rs] PodOnNode{.pod_id = "nginx-with-pod-affinity", .node_id = "dev-worker2"} +1
+[2021-09-07T18:28:51Z INFO  informer_rs] Commiting changes
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation PodAffinityViolated
+[2021-09-07T18:28:51Z INFO  informer_rs] PodAffinityViolated{.pod_id = "nginx-with-pod-affinity2"} +1
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation PodExists
+[2021-09-07T18:28:51Z INFO  informer_rs] PodExists{.name = "nginx-with-pod-affinity2", .status = ""} +1
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation PodOnNode
+[2021-09-07T18:28:51Z INFO  informer_rs] PodOnNode{.pod_id = "nginx-with-pod-affinity2", .node_id = ""} +1
+[2021-09-07T18:28:51Z INFO  informer_rs] Commiting changes
+checking
+node::Node{metadata::ObjectMeta{ddlog_std::None{},ddlog_std::Some{"dev-worker2"},ddlog_std::None{},metadata::UID{"be4637f5-bd08-4453-b6a4-cbabfd4a7554"},ddlog_std::Some{{"beta.kubernetes.io/arch": "amd64", "beta.kubernetes.io/os": "linux", "disktype": "ssd", "kubernetes.io/arch": "amd64", "kubernetes.io/e2e-az-name": "e2e-az1", "kubernetes.io/hostname": "dev-worker2", "kubernetes.io/os": "linux", "topology.kubernetes.io/zone": "west"}}},node::NodeSpec{ddlog_std::Some{"10.244.1.0/24"}},node::NodeStatus{ddlog_std::None{}}}
+checking
+node::Node{metadata::ObjectMeta{ddlog_std::None{},ddlog_std::Some{"dev-worker2"},ddlog_std::None{},metadata::UID{"be4637f5-bd08-4453-b6a4-cbabfd4a7554"},ddlog_std::Some{{"beta.kubernetes.io/arch": "amd64", "beta.kubernetes.io/os": "linux", "disktype": "ssd", "kubernetes.io/arch": "amd64", "kubernetes.io/e2e-az-name": "e2e-az1", "kubernetes.io/hostname": "dev-worker2", "kubernetes.io/os": "linux", "topology.kubernetes.io/zone": "west"}}},node::NodeSpec{ddlog_std::Some{"10.244.1.0/24"}},node::NodeStatus{ddlog_std::None{}}}
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation NodeAffinitySatisfied
+[2021-09-07T18:28:51Z INFO  informer_rs] NodeAffinitySatisfied{.pod_id = "nginx-withaffinity"} +1
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation PodAffinitySatisfied
+[2021-09-07T18:28:51Z INFO  informer_rs] PodAffinitySatisfied{.pod_id = "nginx-with-pod-affinity"} +1
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation PodAffinityTermSatisfied
+[2021-09-07T18:28:51Z INFO  informer_rs] PodAffinityTermSatisfied{.pod_id = "nginx-with-pod-affinity", .terms = [affinity::PodAffinityTerm{.label_selector = ddlog_std::Some{.x = affinity::LabelSelector{.match_expressions = ddlog_std::Some{.x = [affinity::BaseSelectorRequirement{.key = "security", .operator = affinity::LabelSelectorOpIn{}, .values = ddlog_std::Some{.x = ["S1"]}}, affinity::BaseSelectorRequirement{.key = "security", .operator = affinity::LabelSelectorOpNotIn{}, .values = ddlog_std::Some{.x = ["S2"]}}]}, .match_labels = ddlog_std::None{}}}, .namespace_selector = ddlog_std::None{}, .namespaces = ddlog_std::None{}, .topology_key = "topology.kubernetes.io/zone"}]} +1
+[2021-09-07T18:28:51Z INFO  informer_rs] PodAffinityTermSatisfied{.pod_id = "nginx-withaffinity", .terms = []} +1
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation PodAffinityViolated
+[2021-09-07T18:28:51Z INFO  informer_rs] PodAffinityViolated{.pod_id = "nginx-with-pod-affinity"} -1
+[2021-09-07T18:28:51Z INFO  informer_rs] PodAffinityViolated{.pod_id = "nginx-withaffinity"} +1
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation PodExists
+[2021-09-07T18:28:51Z INFO  informer_rs] PodExists{.name = "nginx-withaffinity", .status = ""} +1
+[2021-09-07T18:28:51Z INFO  informer_rs] Changes to relation PodOnNode
+[2021-09-07T18:28:51Z INFO  informer_rs] PodOnNode{.pod_id = "nginx-withaffinity", .node_id = "dev-worker2"} +1
+[2021-09-07T18:28:51Z DEBUG kube::client] HTTP; http.method=GET http.url=https://127.0.0.1:50063/api/v1/namespaces/default/pods?&watch=true&resourceVersion=547860&timeoutSeconds=290&allowWatchBookmarks=true otel.name="watch" otel.kind="client"
+[2021-09-07T18:28:51Z DEBUG kube::client] requesting 
+[2021-09-07T18:28:51Z DEBUG kube::client] HTTP; http.status_code=200

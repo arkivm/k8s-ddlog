@@ -32,8 +32,25 @@ use kube::{
 };
 
 use kube_runtime::{utils::try_flatten_applied, watcher};
+use std::sync::{
+    atomic::{
+        AtomicUsize,
+        Ordering
+    },
+    Mutex,
+};
+use lazy_static::lazy_static;
 
-pub async fn pod_watcher() -> Result<()> {
+lazy_static! {
+    pub static ref UPDATES: Mutex<Vec<Update<DDValue>>> = Mutex::new(Vec::new());
+}
+static POD_COUNT: AtomicUsize = AtomicUsize::new(0);
+static mut TOTAL_PODS: usize = 0;
+
+pub async fn pod_watcher(total_pods : usize) -> Result<()> {
+    unsafe {
+        TOTAL_PODS = total_pods;
+    }
     let client = Client::try_default().await?;
     let namespace = std::env::var("NAMESPACE").unwrap_or_else(|_| "default".into());
     let api = Api::<Pod>::namespaced(client, &namespace);
@@ -219,19 +236,27 @@ fn inject_pod_relation(p: &Pod) {
 
     let pod_obj = get_pod_object(p);
 
-    let updates = vec![
+    let mut updates = vec![
         Update::Insert {
             relid: Relations::pod_Pod as RelId,
             v: pod_obj.into_ddvalue(),
         },
     ];
 
-    perform_hddlog_transaction(updates);
+    UPDATES.lock().expect("lock").append(&mut updates);
+
+    POD_COUNT.fetch_add(1, Ordering::SeqCst);
+
+    unsafe {
+    //if POD_COUNT.load(Ordering::SeqCst) == TOTAL_PODS {
+        let mut final_updates = &*UPDATES.lock().expect("lock");
+        //println!("{:?}", final_updates);
+        perform_hddlog_transaction(final_updates.to_vec());
+    //}
+    }
 }
 
 fn dump_pod_spec(p: &Pod) {
     let spec = p.spec.as_ref().unwrap();
     log::info!("podspec {:?}", spec);
 }
-
-

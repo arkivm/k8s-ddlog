@@ -88,20 +88,18 @@ The running example creates a webapp that sends a response to a HTTP request (bo
     kubia-f22js   1/1     Running   0          136m
     kubia-n67gj   1/1     Running   0          136m
     kubia-r5xvd   1/1     Running   0          136m
-
+    
     $ kubectl get rc # gets the list of replication controllers
     NAME    DESIRED   CURRENT   READY   AGE
     kubia   3         3         3       138m
-
+    
     $ kubectl get node # get the node (in our case, it's minikube)
     NAME       STATUS   ROLES                  AGE     VERSION
     minikube   Ready    control-plane,master   3d17h   v1.21.2
     ```
 
 ## Creating a multi-node cluster
-
- [1] [https://joe.blog.freemansoft.com/2020/07/multi-node-kubernetes-with-kind-and.html](https://joe.blog.freemansoft.com/2020/07/multi-node-kubernetes-with-kind-and.html)
-
+[1] [https://joe.blog.freemansoft.com/2020/07/multi-node-kubernetes-with-kind-and.html](https://joe.blog.freemansoft.com/2020/07/multi-node-kubernetes-with-kind-and.html)
 - `minikube` apparently supports only a single-node cluster. However, with `kind`, one can create a multi-node cluster.
 - Create a configuration file stating how many controller nodes and worker nodes you want on the cluster
 
@@ -116,7 +114,7 @@ The running example creates a webapp that sends a response to a HTTP request (bo
 
     There are some hiccups when you want to access the same cluster after restarting your docker or the machine. There are open issues that somethings are not supported after reboot ([https://github.com/kubernetes-sigs/kind/issues/1689](https://github.com/kubernetes-sigs/kind/issues/1689))
 
-- Then you can create the same set of pods we created on minikube. Since we used the docker env that points to our local docker registry for `minikube`, it worked without passing any credentials to the pod spec. However, with the switch to `kind`, we have to create a secret for pulling images from dockerhub.
+- Create the same set of pods we created using `minikube`. Since we used the docker env that points to our local docker registry for `minikube`, it worked without passing any credentials to the pod spec. However, with the switch to `kind`, we have to create a secret for pulling images from dockerhub.
     - Create secret with docker credentials
 
         ```bash
@@ -154,42 +152,93 @@ The running example creates a webapp that sends a response to a HTTP request (bo
 
     ### Assigning pods to nodes
 
-    [2] [https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/)
+    `nodeSelector`
 
-    1. `nodeSelector`
-        - Assign a label to a node
+    - Assign a label to a node
 
-            ```bash
-            # kubectl label nodes nodename label_key=label_value
-            $ kubectl label nodes node-worker disktype=ssd
-            ```
+        ```bash
+        # kubectl label nodes nodename label_key=label_value
+        $ kubectl label nodes node-worker disktype=ssd
+        ```
 
-        - Use the same label as `nodeSelector` in pod spec
+    - Use the same label as `nodeSelector` in pod spec
 
-            ```yaml
-            apiVersion: v1
-            kind: Pod
-            metadata:
-              name: nginx
-              labels:
-                env: test
-            spec:
-              containers:
-              - name: nginx
-                image: nginx
-                imagePullPolicy: IfNotPresent
-              imagePullSecrets:
-              - name: my-secret
-              nodeSelector:
-                disktype: ssd
-            ```
+        ```yaml
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: nginx
+          labels:
+            env: test
+        spec:
+          containers:
+          - name: nginx
+            image: nginx
+            imagePullPolicy: IfNotPresent
+          imagePullSecrets:
+          - name: my-secret
+          nodeSelector:
+            disktype: ssd
+        ```
 
-            - Then the pod would be scheduled on the node that has this label `disktype=ssd`
+        - Then the pod would be scheduled on the node that has this label `disktype=ssd`
+
     2. Using node Affinity
-    3. 
+        Affinity provides much more expressivity when it comes to specifying constraints. More details (here)[https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/]
 
-    Pod relation
+      Here is an example Pod that specifies a `NodeAffinity` in the configuration
+      ```yaml
+      apiVersion: v1
+      kind: Pod
+      metadata:
+        name: nginx-withaffinity
+        labels:
+          env: test
+          security: S1
+      spec:
+        containers:
+        - name: nginx
+          image: nginx
+          imagePullPolicy: IfNotPresent
+        imagePullSecrets:
+        - name: my-secret
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+              - matchExpressions:
+                - key: kubernetes.io/e2e-az-name
+                  operator: In
+                  values:
+                  - e2e-az1
+                  - e2e-az2
+      ```
 
-    node relation
+    3. using `PodAffinity` and `PodAntiAffinity`
+    Inter-pod affinity and anti-affinity allow you to specify constraints such that the pod would be scheduled on a node that has at least one pod
+    that satifies these labels.
 
-    pod on node relation
+    Here, we create a Pod that affines to the above created pod `nginx-withaffinity` (check labels `security: S1` in the above yaml file)
+    ```yaml
+    apiVersion: v1
+    kind: Pod
+    metadata:
+      name: nginx-with-pod-affinity
+    spec:
+      containers:
+      - name: nginx
+        image: nginx
+        imagePullPolicy: IfNotPresent
+      imagePullSecrets:
+      - name: my-secret
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: security
+                operator: In
+                values:
+                - S1
+            topologyKey: topology.kubernetes.io/zone
+    ```
